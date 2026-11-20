@@ -1,0 +1,181 @@
+
+name: Build EDITH APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Create Android project
+        run: |
+          mkdir -p app/src/main/java/com/edith/smarthome
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "EDITH"
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+              id 'org.jetbrains.kotlin.android' version '2.0.21' apply false
+              id 'org.jetbrains.kotlin.plugin.compose' version '2.0.21' apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+              id 'org.jetbrains.kotlin.plugin.compose'
+          }
+          android {
+              namespace 'com.edith.smarthome'
+              compileSdk 35
+              defaultConfig {
+                  applicationId 'com.edith.smarthome'
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+              buildFeatures { compose true }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = '17' }
+          }
+          dependencies {
+              implementation platform('androidx.compose:compose-bom:2024.12.01')
+              implementation 'androidx.activity:activity-compose:1.10.0'
+              implementation 'androidx.compose.ui:ui'
+              implementation 'androidx.compose.material3:material3'
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <application
+                  android:label="EDITH"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/edith/smarthome/MainActivity.kt <<'EOF'
+          package com.edith.smarthome
+
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContent {
+                      var tab by remember { mutableStateOf("Home") }
+                      val relays = remember {
+                          mutableStateListOf(false, false, false, false)
+                      }
+                      MaterialTheme {
+                          Column(
+                              Modifier.fillMaxSize()
+                                  .background(Color(0xFF080D18))
+                                  .padding(20.dp)
+                          ) {
+                              Text("E.D.I.T.H.", color = Color(0xFF45D9FF), fontSize = 30.sp)
+                              Text("SMART HOME SYSTEM", color = Color.White)
+                              Spacer(Modifier.height(20.dp))
+                              Row {
+                                  listOf("Home", "Pixel Studio", "Settings").forEach {
+                                      TextButton(onClick = { tab = it }) {
+                                          Text(it, color = Color(0xFF45D9FF))
+                                      }
+                                  }
+                              }
+                              when (tab) {
+                                  "Home" -> {
+                                      Text("Relay Controls", color = Color.White)
+                                      relays.forEachIndexed { i, enabled ->
+                                          Row(
+                                              Modifier.fillMaxWidth().padding(8.dp),
+                                              horizontalArrangement = Arrangement.SpaceBetween
+                                          ) {
+                                              Text("Relay ${i + 1}", color = Color.White)
+                                              Switch(enabled, { relays[i] = it })
+                                          }
+                                      }
+                                      Text("Demo switches only. ESP32 connection is not yet enabled.", color = Color.LightGray)
+                                  }
+                                  "Pixel Studio" -> Text("EDITH Pixel Studio", color = Color.White)
+                                  "Settings" -> Text("Device Settings", color = Color.White)
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EDITH-APK
+          path: app/build/outputs/apk/debug/*.apk
