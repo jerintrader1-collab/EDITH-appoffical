@@ -24,9 +24,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Create Android project
         run: |
           mkdir -p app/src/main/java/com/edith/smarthome
@@ -113,6 +110,7 @@ jobs:
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
               <application
+                  android:allowBackup="true"
                   android:label="EDITH"
                   android:theme="@android:style/Theme.Material.Light.NoActionBar"
                   android:usesCleartextTraffic="true">
@@ -162,6 +160,7 @@ jobs:
 
               var tab by remember { mutableStateOf("Home") }
               var ip by remember { mutableStateOf("192.168.4.1") }
+
               val relays = remember {
                   mutableStateListOf(false, false, false, false)
               }
@@ -252,6 +251,7 @@ jobs:
                                   color = cyan,
                                   fontSize = 22.sp
                               )
+
                               Text(
                                   "LED effects will be added here.",
                                   color = Color.White
