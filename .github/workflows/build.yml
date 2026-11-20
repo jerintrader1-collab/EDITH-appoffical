@@ -4,7 +4,8 @@ name: Build EDITH APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -14,18 +15,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Create Android project
         run: |
           mkdir -p app/src/main/java/com/edith/smarthome
+
+          cat > gradle.properties <<'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
+          org.gradle.parallel=true
+          EOF
 
           cat > settings.gradle <<'EOF'
           pluginManagement {
@@ -35,12 +46,14 @@ jobs:
                   gradlePluginPortal()
               }
           }
+
           dependencyResolutionManagement {
               repositories {
                   google()
                   mavenCentral()
               }
           }
+
           rootProject.name = "EDITH"
           include ':app'
           EOF
@@ -59,9 +72,11 @@ jobs:
               id 'org.jetbrains.kotlin.android'
               id 'org.jetbrains.kotlin.plugin.compose'
           }
+
           android {
               namespace 'com.edith.smarthome'
               compileSdk 35
+
               defaultConfig {
                   applicationId 'com.edith.smarthome'
                   minSdk 26
@@ -69,13 +84,21 @@ jobs:
                   versionCode 1
                   versionName '1.0'
               }
-              buildFeatures { compose true }
+
+              buildFeatures {
+                  compose true
+              }
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-              kotlinOptions { jvmTarget = '17' }
+
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
           }
+
           dependencies {
               implementation platform('androidx.compose:compose-bom:2024.12.01')
               implementation 'androidx.activity:activity-compose:1.10.0'
@@ -87,10 +110,13 @@ jobs:
           cat > app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
               <application
                   android:label="EDITH"
                   android:theme="@android:style/Theme.Material.Light.NoActionBar"
                   android:usesCleartextTraffic="true">
+
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -111,8 +137,10 @@ jobs:
           import androidx.activity.compose.setContent
           import androidx.compose.foundation.background
           import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.shape.RoundedCornerShape
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.graphics.Color
           import androidx.compose.ui.unit.dp
@@ -122,43 +150,127 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContent {
-                      var tab by remember { mutableStateOf("Home") }
-                      val relays = remember {
-                          mutableStateListOf(false, false, false, false)
+                      EdithApp()
+                  }
+              }
+          }
+
+          @Composable
+          fun EdithApp() {
+              val bg = Color(0xFF080D18)
+              val cyan = Color(0xFF45D9FF)
+
+              var tab by remember { mutableStateOf("Home") }
+              var ip by remember { mutableStateOf("192.168.4.1") }
+              val relays = remember {
+                  mutableStateListOf(false, false, false, false)
+              }
+
+              MaterialTheme {
+                  Column(
+                      modifier = Modifier
+                          .fillMaxSize()
+                          .background(bg)
+                          .padding(20.dp)
+                  ) {
+                      Text(
+                          "E.D.I.T.H.",
+                          color = cyan,
+                          fontSize = 32.sp
+                      )
+
+                      Text(
+                          "SMART HOME SYSTEM",
+                          color = Color.LightGray,
+                          fontSize = 12.sp
+                      )
+
+                      Spacer(Modifier.height(20.dp))
+
+                      Row {
+                          listOf("Home", "Pixel Studio", "Settings").forEach {
+                              TextButton(onClick = { tab = it }) {
+                                  Text(it, color = cyan)
+                              }
+                          }
                       }
-                      MaterialTheme {
-                          Column(
-                              Modifier.fillMaxSize()
-                                  .background(Color(0xFF080D18))
-                                  .padding(20.dp)
-                          ) {
-                              Text("E.D.I.T.H.", color = Color(0xFF45D9FF), fontSize = 30.sp)
-                              Text("SMART HOME SYSTEM", color = Color.White)
-                              Spacer(Modifier.height(20.dp))
-                              Row {
-                                  listOf("Home", "Pixel Studio", "Settings").forEach {
-                                      TextButton(onClick = { tab = it }) {
-                                          Text(it, color = Color(0xFF45D9FF))
+
+                      Spacer(Modifier.height(20.dp))
+
+                      when (tab) {
+                          "Home" -> {
+                              Text(
+                                  "Relay Controls",
+                                  color = Color.White,
+                                  fontSize = 22.sp
+                              )
+
+                              Spacer(Modifier.height(12.dp))
+
+                              relays.forEachIndexed { index, enabled ->
+                                  Card(
+                                      modifier = Modifier
+                                          .fillMaxWidth()
+                                          .padding(vertical = 5.dp),
+                                      shape = RoundedCornerShape(16.dp),
+                                      colors = CardDefaults.cardColors(
+                                          containerColor = Color(0xFF172438)
+                                      )
+                                  ) {
+                                      Row(
+                                          modifier = Modifier
+                                              .fillMaxWidth()
+                                              .padding(16.dp),
+                                          verticalAlignment = Alignment.CenterVertically
+                                      ) {
+                                          Text(
+                                              "Relay ${index + 1}",
+                                              color = Color.White,
+                                              modifier = Modifier.weight(1f)
+                                          )
+
+                                          Switch(
+                                              checked = enabled,
+                                              onCheckedChange = {
+                                                  relays[index] = it
+                                              }
+                                          )
                                       }
                                   }
                               }
-                              when (tab) {
-                                  "Home" -> {
-                                      Text("Relay Controls", color = Color.White)
-                                      relays.forEachIndexed { i, enabled ->
-                                          Row(
-                                              Modifier.fillMaxWidth().padding(8.dp),
-                                              horizontalArrangement = Arrangement.SpaceBetween
-                                          ) {
-                                              Text("Relay ${i + 1}", color = Color.White)
-                                              Switch(enabled, { relays[i] = it })
-                                          }
-                                      }
-                                      Text("Demo switches only. ESP32 connection is not yet enabled.", color = Color.LightGray)
-                                  }
-                                  "Pixel Studio" -> Text("EDITH Pixel Studio", color = Color.White)
-                                  "Settings" -> Text("Device Settings", color = Color.White)
-                              }
+
+                              Text(
+                                  "Demo switches only. ESP32 connection is not enabled yet.",
+                                  color = Color.LightGray,
+                                  fontSize = 11.sp
+                              )
+                          }
+
+                          "Pixel Studio" -> {
+                              Text(
+                                  "EDITH Pixel Studio",
+                                  color = cyan,
+                                  fontSize = 22.sp
+                              )
+                              Text(
+                                  "LED effects will be added here.",
+                                  color = Color.White
+                              )
+                          }
+
+                          "Settings" -> {
+                              Text(
+                                  "Device Settings",
+                                  color = cyan,
+                                  fontSize = 22.sp
+                              )
+
+                              OutlinedTextField(
+                                  value = ip,
+                                  onValueChange = { ip = it },
+                                  label = { Text("ESP32 IP Address") },
+                                  singleLine = true
+                              )
                           }
                       }
                   }
@@ -166,7 +278,7 @@ jobs:
           }
           EOF
 
-      - name: Set up Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -179,3 +291,4 @@ jobs:
         with:
           name: EDITH-APK
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
