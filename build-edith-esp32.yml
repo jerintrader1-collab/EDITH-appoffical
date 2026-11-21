@@ -1,1 +1,43 @@
 
+
+name: Build EDITH ESP32-C3 Firmware
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/build-edith-esp32.yml'
+
+jobs:
+  build:
+    name: Compile EDITH Firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout EDITH
+        uses: actions/checkout@v4
+
+      - name: Install ESP-IDF
+        uses: espressif/install-esp-idf-action@v1
+        with:
+          esp_idf_version: v5.3.2
+
+      - name: Configure ESP32-C3
+        working-directory: firmware
+        run: |
+          idf.py set-target esp32c3
+
+      - name: Build firmware
+        working-directory: firmware
+        run: |
+          idf.py build
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: EDITH-ESP32-C3-Firmware
+          path: |
+            firmware/build/*.bin
+          if-no-files-found: error
+          retention-days: 14
